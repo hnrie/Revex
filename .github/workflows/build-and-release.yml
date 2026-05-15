@@ -63,6 +63,7 @@ jobs:
         shell: pwsh
         run: |
           choco install ninja -y
+          C:/msys64/usr/bin/bash.exe -lc "pacman -S --noconfirm --needed mingw-w64-x86_64-libuv"
 
       - name: Configure
         run: |
