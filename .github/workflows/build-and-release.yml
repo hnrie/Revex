@@ -1,0 +1,141 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (for manual reruns)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cmake_generator: Ninja
+            archive_ext: tar.gz
+            bin_name: revex
+          - os: macos-latest
+            cmake_generator: Ninja
+            archive_ext: tar.gz
+            bin_name: revex
+          - os: windows-latest
+            cmake_generator: Ninja
+            archive_ext: zip
+            bin_name: revex.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libssl-dev libuv1-dev hwloc
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja openssl@3 libuv hwloc
+
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ninja -y
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Stage package (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          cp "build/${{ matrix.bin_name }}" dist/
+          cp README.md LICENSE dist/
+          tar -czf "revex-${{ github.ref_name || inputs.tag }}-${{ runner.os }}-x64.tar.gz" -C dist .
+
+      - name: Stage package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "build/${{ matrix.bin_name }}" dist/
+          Copy-Item README.md, LICENSE dist/
+          Compress-Archive -Path dist/* -DestinationPath "revex-${{ github.ref_name || inputs.tag }}-${{ runner.os }}-x64.zip" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: revex-${{ runner.os }}
+          path: |
+            revex-${{ github.ref_name || inputs.tag }}-${{ runner.os }}-x64.${{ matrix.archive_ext }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euxo pipefail
+          find release-assets -type f -maxdepth 2 -print0 | xargs -0 sha256sum > release-assets/SHA256SUMS.txt
+
+      - name: Publish release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            Automated multi-platform release for **${{ github.ref_name || inputs.tag }}**.
+
+            ### Included artifacts
+            - Linux x64 build
+            - macOS x64 build
+            - Windows x64 build
+            - SHA256 checksums
+
+            The release notes were auto-generated from commits.
+          files: |
+            release-assets/**/*.tar.gz
+            release-assets/**/*.zip
+            release-assets/SHA256SUMS.txt
