@@ -24,6 +24,31 @@ The preferred way to configure the miner is the [JSON config file](https://xmrig
 * **[Wizard](https://xmrig.com/wizard)** helps you create initial configuration for the miner.
 * **[Workers](http://workers.xmrig.info)** helps manage your miners via HTTP API.
 
+## Linux troubleshooting
+
+### `error while loading shared libraries: libssl.so.3`
+
+If you see:
+
+```text
+./revex: error while loading shared libraries: libssl.so.3: cannot open shared object file: No such file or directory
+```
+
+your binary was linked against OpenSSL 3, but your OS only has OpenSSL 1.1 runtime libraries.
+
+Use one of these fixes:
+
+1. Install an OpenSSL 3 runtime package for your distribution (package names vary by distro/release).
+2. Build Revex from source with static dependencies so OpenSSL is bundled into the binary:
+
+```bash
+./scripts/build_deps.sh
+cmake -S . -B build -DXMRIG_DEPS="$(pwd)/deps" -DBUILD_STATIC=ON
+cmake --build build -j"$(nproc)"
+```
+
+This avoids depending on a system-provided `libssl.so.3` at runtime.
+
 ## Donations
 * Default donation 0% can be increased via option `donate-level`.
 * XMR: `48edfHu7V9Z84YzzMa6fUueoELZ9ZRXq9VetWzYGzKt52XU5xvqgzYnDK9URnRoJMk1j8nLwEVsaSWJ4fhdUyZijBGUicoD`
