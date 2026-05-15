@@ -34,10 +34,6 @@ jobs:
             cmake_generator: Ninja
             archive_ext: tar.gz
             bin_name: revex
-          - os: windows-latest
-            cmake_generator: Ninja
-            archive_ext: zip
-            bin_name: revex.exe
 
     steps:
       - name: Checkout
@@ -58,23 +54,15 @@ jobs:
           brew update
           brew install ninja openssl@3 libuv hwloc
 
-      - name: Install Windows dependencies
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          choco install ninja -y
-          C:/msys64/usr/bin/bash.exe -lc "pacman -S --noconfirm --needed mingw-w64-x86_64-libuv"
-
       - name: Configure
         run: |
-          cmake -S . -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release ${{ runner.os == 'Windows' && '-DWITH_HWLOC=OFF' || '' }}
+          cmake -S . -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: |
           cmake --build build --config Release --parallel
 
-      - name: Stage package (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Stage package
         shell: bash
         run: |
           set -euxo pipefail
@@ -82,15 +70,6 @@ jobs:
           cp "build/${{ matrix.bin_name }}" dist/
           cp README.md LICENSE dist/
           tar -czf "revex-${{ github.ref_name || inputs.tag }}-${{ runner.os }}-x64.tar.gz" -C dist .
-
-      - name: Stage package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item "build/${{ matrix.bin_name }}" dist/
-          Copy-Item README.md, LICENSE dist/
-          Compress-Archive -Path dist/* -DestinationPath "revex-${{ github.ref_name || inputs.tag }}-${{ runner.os }}-x64.zip" -Force
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -132,11 +111,9 @@ jobs:
             ### Included artifacts
             - Linux x64 build
             - macOS x64 build
-            - Windows x64 build
             - SHA256 checksums
 
             The release notes were auto-generated from commits.
           files: |
             release-assets/**/*.tar.gz
-            release-assets/**/*.zip
             release-assets/SHA256SUMS.txt
