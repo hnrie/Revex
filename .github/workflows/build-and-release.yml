@@ -46,17 +46,26 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libssl-dev libuv1-dev libhwloc-dev
+          sudo apt-get install -y ninja-build build-essential autoconf automake libtool perl wget
 
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install ninja openssl@3 libuv hwloc
+          brew install ninja automake autoconf libtool wget
+
+      - name: Build static third-party dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./scripts/build_deps.sh
 
       - name: Configure
         run: |
-          cmake -S . -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G "${{ matrix.cmake_generator }}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_STATIC=ON \
+            -DXMRIG_DEPS="${{ github.workspace }}/deps"
 
       - name: Build
         run: |
