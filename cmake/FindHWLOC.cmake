@@ -1,12 +1,12 @@
 find_path(
     HWLOC_INCLUDE_DIR
-    NAMES hwloc.h
+    NAMES hwloc.h hwloc/hwloc.h
     PATHS "${XMRIG_DEPS}" ENV "XMRIG_DEPS"
     PATH_SUFFIXES "include"
     NO_DEFAULT_PATH
 )
 
-find_path(HWLOC_INCLUDE_DIR NAMES hwloc.h)
+find_path(HWLOC_INCLUDE_DIR NAMES hwloc.h hwloc/hwloc.h)
 
 find_library(
     HWLOC_LIBRARY
